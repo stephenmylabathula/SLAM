@@ -165,6 +165,7 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
         elif epsilon_1 < gamma_min < epsilon_2:
             pass
         else:
+            # Throw out repeated lines
             newL = True
             phi = x_t[2]
             G_th = z[1] + phi
@@ -175,7 +176,5 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
                     newL = False
             if newL:
                 x_t, P = new_landmark(P, x_t, G_p_R_hat, z, R)
-
-    print "DONE"
 
     return x_t, P

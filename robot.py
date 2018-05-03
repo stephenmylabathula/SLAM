@@ -89,8 +89,8 @@ class Robot:
         self.robot.setDirectMotionPrecedenceTime(self.time_step)
         self.robot.lock()
         self.robot.clearDirectMotion()
-        #self.robot.setVel(v)
-        #self.robot.setRotVel(w)
+        self.robot.setVel(v)
+        self.robot.setRotVel(w)
         self.robot.unlock()
 
     def control(self, laser_readings, sonar_readings):
