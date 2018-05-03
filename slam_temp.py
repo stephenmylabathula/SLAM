@@ -74,14 +74,12 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
     p1 = 0.9
     p2 = 0.1
     n = 2
-
     epsilon_1 = 1 / stats.chi2.cdf(p1, n);
     epsilon_2 = 1 / stats.chi2.cdf(p2, n);
 
-    # Formalize notation
+    # formalize notation
     R = Sig_msmt
     P = Sig_t
-
     G_p_R_hat = x_t[0:2]
     phi = x_t[2]
     J = np.array([[0, -1], [1, 0]])
@@ -90,21 +88,21 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
     # Mahalonobis Distance test
     M = detected_features.shape[1]  # Num measured landmarks
 
-    print("********** BEGIN LOOP **********")
+    #print("********** BEGIN LOOP **********")
     for i in range(M):
         N = (x_t.shape[0] - 3) // 2  # get number of state landmarks (assume proper state vector)
         gamma = np.full(N, np.inf)  # initialize gamma vector
 
-        z = detected_features[:, i].reshape(2, 1);  # The current measurement (matlab has it as x,y pairs)
+        z = detected_features[:, i].reshape(2, 1)  # The current measurement (matlab has it as x,y pairs)
 
         # Iterate through all landmarks to find a match
         for j in range(N):
             # calculate z_hat in local frame
             p_hat = x_t[j * 2 + 3:j * 2 + 5]  # p_hat global
 
-            z_hat_d = p_hat[0] - x_t[0] * np.cos(p_hat[1]) - x_t[1] * np.sin(p_hat[1])
-            z_hat_th = p_hat[1] - x_t[2]
-            z_hat = np.array([[z_hat_d[0]], [z_hat_th]], dtype=np.float64)
+            z_hat_d = p_hat[0][0] - x_t[0][0] * np.cos(p_hat[1][0]) - x_t[1][0] * np.sin(p_hat[1][0])
+            z_hat_th = p_hat[1][0] - x_t[2][0]
+            z_hat = np.array([[z_hat_d], [z_hat_th]], dtype=np.float64)
 
             # caluculate residual
             r = z - z_hat
@@ -139,16 +137,14 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
                 # do update on gamma_min_index
                 # calculate z_hat in local frame
                 p_hat = x_t[gamma_min_index * 2 + 3:gamma_min_index * 2 + 5]  # p_hat global
-                z_hat_d = p_hat[0] - x_t[0] * np.cos(p_hat[1]) - x_t[1] * np.sin(p_hat[1])
-                z_hat_th = p_hat[1] - x_t[2]
-                if z_hat_th > np.pi:
-                    z_hat_th -= np.pi
-                z_hat = np.array([[z_hat_d[0]], [z_hat_th[0]]])
+
+                z_hat_d = p_hat[0][0] - x_t[0][0] * np.cos(p_hat[1][0]) - x_t[1][0] * np.sin(p_hat[1][0])
+                z_hat_th = p_hat[1][0] - x_t[2][0]
+                z_hat = np.array([[z_hat_d], [z_hat_th]], dtype=np.float64)
 
                 # caluculate residual
                 r = z - z_hat
-                if r[1] > 3 or r[1] < 0.14:
-                    r[1] = np.sin(z[1] - z_hat[1])
+                r[1] = angdiff(z[1][0], z_hat[1][0])
 
                 # create H matrix
                 h_li = np.sin(th_landmark) * x_t[0] - np.cos(th_landmark) * x_t[1]
@@ -167,8 +163,8 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
                 # reflect update in state and covariance
                 x_t = x_t + np.matmul(K, r);
                 P = P - np.matmul(np.matmul(np.matmul(np.matmul(P, H.T), np.linalg.inv(S)), H), P)
-                print("Found: ", p_hat, " As Local: ", z)
-                print("X_T: {}".format(x_t))
+                #print("Found: ", p_hat, " As Local: ", z)
+                #print("X_T: {}".format(x_t))
                 # print("END UPDATEs\n")
 
             elif epsilon_1 < gamma_min and gamma_min < epsilon_2:

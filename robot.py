@@ -130,7 +130,7 @@ class Robot:
         self.drive(distances, thetas, laser_readings, sonar_readings)
     
         self.SLAM_propagate()
-        #print self.x_t.T, " | Uncertainty: ", np.linalg.det(self.Sig_t[0:3, 0:3])
+        print self.x_t, " | Uncertainty: ", np.linalg.det(self.Sig_t[0:3, 0:3])
         if landmarks.shape[1] > 0:
             self.x_t, self.Sig_t = SLAM_update(self.x_t, self.Sig_t, landmarks, self.Sig_msmt)
 
