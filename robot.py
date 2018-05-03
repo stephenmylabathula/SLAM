@@ -16,10 +16,10 @@ class Robot:
 
         self.Q = np.array([[0.0075, 0.00075],
                            [0.00075, 0.0075]])
-        self.Sig_msmt = np.array([[0.01, 0.001],
-                                  [0.001, 0.01]])
+        self.Sig_msmt = np.array([[0.001, 0.0001],
+                                  [0.0001, 0.001]])
         self.x_t = np.zeros((3, 1))
-        self.Sig_t = 0.1 * np.eye(3)
+        self.Sig_t = 0.001 * np.eye(3)
 
         plt.ion()
 
@@ -130,7 +130,7 @@ class Robot:
         self.drive(distances, thetas, laser_readings, sonar_readings)
     
         self.SLAM_propagate()
-        print self.x_t, " | Uncertainty: ", np.linalg.det(self.Sig_t[0:3, 0:3])
+        print self.x_t[0:3], " | Uncertainty: ", np.linalg.det(self.Sig_t[0:3, 0:3])
         if landmarks.shape[1] > 0:
             self.x_t, self.Sig_t = SLAM_update(self.x_t, self.Sig_t, landmarks, self.Sig_msmt)
 

@@ -11,8 +11,10 @@ def angdiff(v1, v2):
     return np.arccos(np.matmul(np.array([v1x, v1y]), np.array([v2x, v2y]).T))
 
 
+def new_landmark(P, x_t, G_p_R_hat, z, R):
 
-def new_landmark(P, x_t, G_p_R_hat, z, th_landmark, R):
+    th_landmark = z[1][0] + x_t[2][0]
+
     # Add some zeros for the new landmark covariance matrices
     first_new_row = P.shape[0] + 1  # Used for numpy
     first_row_index = first_new_row - 1  # Used for plain python
@@ -64,7 +66,7 @@ def new_landmark(P, x_t, G_p_R_hat, z, th_landmark, R):
     rho = G_p_R_hat[0] * np.cos(G_th) + G_p_R_hat[1] * np.sin(G_th)
     G_d = z[0] + rho
     p_hat = np.array([[G_d[0]], [G_th[0]]])
-    # print("\n\nNEW LANDMARK AT:\n{}\n\n".format(p_hat))
+    #print("\n\nNEW LANDMARK AT:\n{}\n\n".format(p_hat))
     new_x_t = np.concatenate((x_t, p_hat), axis=0)
     return new_x_t, new_P
 
@@ -100,7 +102,8 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
             # calculate z_hat in local frame
             p_hat = x_t[j * 2 + 3:j * 2 + 5]  # p_hat global
 
-            z_hat_d = p_hat[0][0] - x_t[0][0] * np.cos(p_hat[1][0]) - x_t[1][0] * np.sin(p_hat[1][0])
+            # y = x and x = -y b/c of coordinate shift
+            z_hat_d = p_hat[0][0] + x_t[1][0] * np.cos(p_hat[1][0]) - x_t[0][0] * np.sin(p_hat[1][0])
             z_hat_th = p_hat[1][0] - x_t[2][0]
             z_hat = np.array([[z_hat_d], [z_hat_th]], dtype=np.float64)
 
@@ -121,55 +124,58 @@ def SLAM_update(x_t, Sig_t, detected_features, Sig_msmt):
         gamma_min_index = -1 if N == 0 else np.argmin(gamma)
         gamma_min = np.inf if gamma_min_index == -1 else gamma[gamma_min_index]
 
-        curr_landmark = x_t[gamma_min_index * 2 + 3:gamma_min_index * 2 + 5]
-        d_landmark = curr_landmark[0][0]
-        th_landmark = curr_landmark[1][0]
+        #print "Gamma: ", gamma_min
 
         # Perform Mahalanobis test
-        # If there are no gamma values
         if N == 0:
-            x_t, P = new_landmark(P, x_t, G_p_R_hat, z, th_landmark, R)
+            x_t, P = new_landmark(P, x_t, G_p_R_hat, z, R)
+        elif gamma_min <= epsilon_1:
 
+            # do update on gamma_min_index
+            # calculate z_hat in local frame
+            p_hat = x_t[gamma_min_index * 2 + 3:gamma_min_index * 2 + 5]  # p_hat global
+
+            # y = x and x = -y b/c of coordinate shift
+            z_hat_d = p_hat[0][0] + x_t[1][0] * np.cos(p_hat[1][0]) - x_t[0][0] * np.sin(p_hat[1][0])
+            z_hat_th = p_hat[1][0] - x_t[2][0]
+            z_hat = np.array([[z_hat_d], [z_hat_th]], dtype=np.float64)
+
+            # caluculate residual
+            r = z - z_hat
+            r[1] = angdiff(z[1][0], z_hat[1][0])
+
+            # create H matrix
+            h_li = np.sin(p_hat[1]) * x_t[0] - np.cos(p_hat[1]) * x_t[1]
+            H_Li = np.array([[1, h_li], [0, 1]])
+            h_r_cos = -np.cos(p_hat[1])[0]
+            h_r_sin = -np.sin(p_hat[1])[0]
+            H_R = np.array([[h_r_cos, h_r_sin, 0], [0, 0, -1]])
+
+            H = np.concatenate(
+                (H_R, np.zeros([2, 2 * gamma_min_index]), H_Li, np.zeros([2, 2 * (N - gamma_min_index - 1)])),
+                axis=1)
+            S = np.matmul(np.matmul(H, P), H.T) + R
+            K = np.matmul(np.matmul(P, H.T), np.linalg.inv(S))
+
+            # reflect update in state and covariance
+            x_t = x_t + np.matmul(K, r)
+            P = P - np.matmul(np.matmul(np.matmul(np.matmul(P, H.T), np.linalg.inv(S)), H), P)
+            #print("Found: ", p_hat, " As Local: ", z)
+
+        elif epsilon_1 < gamma_min < epsilon_2:
+            pass
         else:
-            if gamma_min <= epsilon_1:
-                # print("\nUPDATEs")
-                # print("X_T: {}".format(x_t))
-                # do update on gamma_min_index
-                # calculate z_hat in local frame
-                p_hat = x_t[gamma_min_index * 2 + 3:gamma_min_index * 2 + 5]  # p_hat global
+            newL = True
+            phi = x_t[2]
+            G_th = z[1] + phi
+            rho = G_p_R_hat[0] * np.cos(G_th) + G_p_R_hat[1] * np.sin(G_th)
+            G_d = z[0] + rho
+            for i in range(3, len(x_t), 2):
+                if abs(x_t[i] - G_d) < 0.7 and abs(x_t[i+1] - G_th) < 0.7:
+                    newL = False
+            if newL:
+                x_t, P = new_landmark(P, x_t, G_p_R_hat, z, R)
 
-                z_hat_d = p_hat[0][0] - x_t[0][0] * np.cos(p_hat[1][0]) - x_t[1][0] * np.sin(p_hat[1][0])
-                z_hat_th = p_hat[1][0] - x_t[2][0]
-                z_hat = np.array([[z_hat_d], [z_hat_th]], dtype=np.float64)
-
-                # caluculate residual
-                r = z - z_hat
-                r[1] = angdiff(z[1][0], z_hat[1][0])
-
-                # create H matrix
-                h_li = np.sin(th_landmark) * x_t[0] - np.cos(th_landmark) * x_t[1]
-                H_Li = np.array([[1, h_li], [0, 1]])
-
-                h_r_cos = -np.cos(th_landmark)
-                h_r_sin = -np.sin(th_landmark)
-                H_R = np.array([[h_r_cos, h_r_sin, 0], [0, 0, -1]])
-
-                H = np.concatenate(
-                    (H_R, np.zeros([2, 2 * gamma_min_index]), H_Li, np.zeros([2, 2 * (N - gamma_min_index - 1)])),
-                    axis=1)
-                S = np.matmul(np.matmul(H, P), H.T) + R
-                K = np.matmul(np.matmul(P, H.T), np.linalg.inv(S))
-
-                # reflect update in state and covariance
-                x_t = x_t + np.matmul(K, r);
-                P = P - np.matmul(np.matmul(np.matmul(np.matmul(P, H.T), np.linalg.inv(S)), H), P)
-                #print("Found: ", p_hat, " As Local: ", z)
-                #print("X_T: {}".format(x_t))
-                # print("END UPDATEs\n")
-
-            elif epsilon_1 < gamma_min and gamma_min < epsilon_2:
-                pass
-            else:
-                x_t, P = new_landmark(P, x_t, G_p_R_hat, z, th_landmark, R)
+    print "DONE"
 
     return x_t, P
